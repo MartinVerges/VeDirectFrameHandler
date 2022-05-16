@@ -29,10 +29,14 @@
  * 2020.05.05 - 0.2 - initial release
  * 2020.06.21 - 0.2 - add MIT license, no code changes
  * 2020.08.20 - 0.3 - corrected #include reference
- * 
+ * 2022.05.16 - 0.4 - drop arduino requirements, by Martin Verges
  */
  
-#include <Arduino.h>
+#include <ctype.h>
+#include <cstdint>
+#include <stdio.h>
+#include <string.h>
+
 #include "VeDirectFrameHandler.h"
 
 #define MODULE "VE.Frame"	// Victron seems to use this to find out where logging messages were generated
