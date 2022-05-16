@@ -26,8 +26,8 @@ public:
     char veName[buffLen][nameLen] = { };        // public buffer for received names
     char veValue[buffLen][valueLen] = { };      // public buffer for received values
 
-    int frameIndex;                             // which line of the frame are we on
-    int veEnd;                                  // current size (end) of the public buffer
+    int frameIndex = 0;                         // which line of the frame are we on
+    int veEnd = 0;                              // current size (end) of the public buffer
 
 private:
     //bool mStop;                               // not sure what Victron uses this for, not using
@@ -41,20 +41,21 @@ private:
         RECORD_HEX
     };
 
-    int mState;                                 // current state
+    int mState = States::IDLE;                  // current state
 
-    uint8_t	mChecksum;                          // checksum value
+    uint8_t	mChecksum = 0;                      // checksum value
 
     char * mTextPointer;                        // pointer to the private buffer we're writing to, name or value
 
-    char mName[9];                              // buffer for the field name
-    char mValue[33];                            // buffer for the field value
     char tempName[frameLen][nameLen];           // private buffer for received names
     char tempValue[frameLen][valueLen];         // private buffer for received values
 
+    char mName[9];                              // buffer for the field name
+    char mValue[33];                            // buffer for the field value
+
     void textRxEvent(char *, char *);
     void frameEndEvent(bool);
-    void logE(char *, char *);
+    void logE(const char *, const char *);
     bool hexRxEvent(uint8_t);
 };
 

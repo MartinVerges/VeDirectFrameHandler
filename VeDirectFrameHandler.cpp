@@ -39,12 +39,13 @@
 
 #include "VeDirectFrameHandler.h"
 
-#define MODULE "VE.Frame"	// Victron seems to use this to find out where logging messages were generated
+const char* MODULE = "VE.Frame";	// Victron seems to use this to find out where logging messages were generated
 
 // The name of the record that contains the checksum.
 static constexpr char checksumTagName[] = "CHECKSUM";
 
-VeDirectFrameHandler::VeDirectFrameHandler() :
+VeDirectFrameHandler::VeDirectFrameHandler()
+/*:
 	//mStop(false),	// don't know what Victron uses this for, not using
 	mState(IDLE),
 	mChecksum(0),
@@ -55,6 +56,7 @@ VeDirectFrameHandler::VeDirectFrameHandler() :
 	veName(),
 	veValue(),
 	veEnd(0)
+	*/
 {
 }
 
@@ -137,7 +139,7 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte)
 	{
 		bool valid = mChecksum == 0;
 		if (!valid)
-			logE(MODULE,"[CHECKSUM] Invalid frame");
+			logE(MODULE, "[CHECKSUM] Invalid frame");
 		mChecksum = 0;
 		mState = IDLE;
 		frameEndEvent(valid);
@@ -196,7 +198,9 @@ void VeDirectFrameHandler::frameEndEvent(bool valid) {
  *	logE
  *  This function included for continuity and possible future use.	
  */
-void VeDirectFrameHandler::logE(char * module, char * error) {
+void VeDirectFrameHandler::logE(const char * module, const char * error) {
+	(void)module;
+	(void)error;
 	//Serial.print("MODULE: ");
     //Serial.println(module);
     //Serial.print("ERROR: ");
@@ -209,5 +213,6 @@ void VeDirectFrameHandler::logE(char * module, char * error) {
  *  This function included for continuity and possible future use.	
  */
 bool VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
+	(void)inbyte;
 	return true;		// stubbed out for future
 }
