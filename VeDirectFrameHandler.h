@@ -55,7 +55,6 @@ private:
 
     void textRxEvent(char *, char *);
     void frameEndEvent(bool);
-    void logE(const char *, const char *);
     bool hexRxEvent(uint8_t);
 };
 
