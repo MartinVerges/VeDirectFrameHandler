@@ -30,6 +30,7 @@
  * 2020.06.21 - 0.2 - add MIT license, no code changes
  * 2020.08.20 - 0.3 - corrected #include reference
  * 2022.05.16 - 0.4 - drop arduino requirements, by Martin Verges
+ * 2022.05.17 - 0.5 - add support for the HEX protocol
  */
  
 #include <ctype.h>
@@ -38,6 +39,9 @@
 #include <string.h>
 
 #include "VeDirectFrameHandler.h"
+
+// initial number - buffer is dynamically increased if necessary
+#define MAX_HEX_CALLBACK 10	
 
 // The name of the record that contains the checksum. 
 // It's upper case as we upper all chars in the progress.
@@ -49,17 +53,29 @@ static constexpr char checksumTagName[] = "CHECKSUM";
 VeDirectFrameHandler::VeDirectFrameHandler() {}
 
 /**
+ * @brief Destroy the Ve Direct Frame Handler:: Ve Direct Frame Handler object
+ * 
+ */
+VeDirectFrameHandler::~VeDirectFrameHandler() {
+  	if (veHexCBList) delete veHexCBList;
+}
+
+/**
  * @brief Reads the next byte given and parses it into the frame
  * @details This function is called by the application which passes a byte of serial data
- * @param inbyte 
+ * 
+ * @param inbyte Input byte to store in the tmp memory
  */
 void VeDirectFrameHandler::rxData(uint8_t inbyte) {
 	if ( inbyte == ':' && mState != CHECKSUM ) {
+	  	vePushedState = mState; //hex frame can interrupt TEXT
 		mState = RECORD_HEX;
+		veHEnd = 0;
 	}
 	if (mState != RECORD_HEX && mState != IDLE) {
 		mChecksum += inbyte;
 	}
+	// printf("Checksum = %d	mState = %d\n", mChecksum, mState);
 	inbyte = toupper(inbyte);
 
 	switch(mState) {
@@ -126,9 +142,9 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
 		case CHECKSUM:
 			switch(inbyte) {
 				case '\n':
-					if (mChecksum)
-						printf("[CHECKSUM] Invalid frame\n");
+					if (mChecksum != 0) printf("[CHECKSUM] Invalid frame\n");
 					mState = IDLE;
+					mChecksum = 0;
 					frameEndEvent(mChecksum == 0);
 					break;
 				default:	// ignore, but use the char for the checksum
@@ -136,17 +152,16 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
 			}
 			break;
 		case RECORD_HEX:
-			if (hexRxEvent(inbyte)) {
-				mChecksum = 0;
-				mState = IDLE;
-			}
+			mState = hexRxEvent(inbyte);
 			break;
 	} // End of switch(mState)
 }
 
-/*
- * textRxEvent
- * This function is called every time a new name/value is successfully parsed.  It writes the values to the temporary buffer.
+/**
+ * @brief This function is called every time a new name/value is successfully parsed.  It writes the values to the temporary buffer.
+ * 
+ * @param mName 	Name of the element
+ * @param mValue 	Value of the element
  */
 void VeDirectFrameHandler::textRxEvent(char * mName, char * mValue) {
 	if (frameIndex < frameLen) {				// prevent overflow
@@ -156,11 +171,13 @@ void VeDirectFrameHandler::textRxEvent(char * mName, char * mValue) {
     }
 }
 
-/*
- *	frameEndEvent
- *  This function is called at the end of the received frame.  If the checksum is valid, the temp buffer is read line by line.
- *  If the name exists in the public buffer, the new value is copied to the public buffer.	If not, a new name/value entry
- *  is created in the public buffer.
+/**
+ * @brief This function is called at the end of the received frame. 
+ * @details If the checksum is valid, the temp buffer is read line by line. 
+ *          If the name exists in the public buffer, the new value is copied to the public buffer.
+ *          If not, a new name/value entry is created in the public buffer.
+ * 
+ * @param valid		Set to true if the checksum was correct
  */
 void VeDirectFrameHandler::frameEndEvent(bool valid) {
 	if (valid) {
@@ -186,11 +203,67 @@ void VeDirectFrameHandler::frameEndEvent(bool valid) {
 	frameIndex = 0;	// reset frame
 }
 
-/*
- *	hexRxEvent
- *  This function included for continuity and possible future use.	
+
+
+#define ascii2hex(v) (v-48-(v>='A'?7:0))
+#define hex2byte(b) (ascii2hex(*(b)))*16+((ascii2hex(*(b+1))))
+
+static bool hexIsValid(const char* buffer, int size) {
+  uint8_t checksum=0x55-ascii2hex(buffer[1]);
+  for (int i=2; i<size; i+=2) checksum -= hex2byte(buffer+i);
+  return (checksum==0);
+}
+
+/**
+ * @brief This function records hex answers or async messages
+ * 
+ * @param inbyte
+ * @return mState
  */
-bool VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
-	(void)inbyte;
-	return true;		// stubbed out for future
+int VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
+	int ret=RECORD_HEX; // default - continue recording until end of frame
+	switch (inbyte) {
+		case '\n':
+			// message ready - call all callbacks
+			if (hexIsValid(veHexBuffer,veHEnd)) {
+				for(int i=0; i<veCBEnd; i++) {
+					(*(veHexCBList[i].cb))(veHexBuffer, veHEnd, veHexCBList[i].data);
+				}
+			} else printf("[CHECKSUM] Invalid hex frame \n");
+			// restore previous state
+			ret=vePushedState;
+			break;
+		default:
+			veHexBuffer[veHEnd++]=inbyte;
+			if (veHEnd>=hexBuffLen) { // oops -buffer overflow - something went wrong, we abort
+			printf("hexRx buffer overflow - aborting read");
+			veHEnd=0;
+			ret=IDLE;
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief This function record a new callback for hex frames
+ * 
+ * @param cb
+ * @param data 
+ */
+void VeDirectFrameHandler::addHexCallback(hexCallback cb, void* data) {
+  if (veHexCBList==0) { // first time, allocate callbacks buffer
+    veHexCBList=new VeHexCB[maxCB];
+    veCBEnd=0;
+  }
+  else if (veCBEnd==maxCB) { // we need to resize the callbacks buffer, we double the max size
+    int newMax=maxCB*2;
+    VeHexCB* tmpb=new VeHexCB[newMax];
+    memcpy(tmpb, veHexCBList, maxCB*sizeof(VeHexCB));
+    maxCB=newMax;
+    delete veHexCBList;
+    veHexCBList=tmpb;
+  }
+  veHexCBList[veCBEnd].cb=cb;
+  veHexCBList[veCBEnd].data=data;
+  veCBEnd++;
 }
