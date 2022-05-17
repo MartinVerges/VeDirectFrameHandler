@@ -27,11 +27,15 @@ class VeDirectFrameHandler {
     void rxData(uint8_t inbyte);                // byte of serial data to be passed by the application
     void addHexCallback(hexCallback, void*);    // add function called back when hex frame is ready (sync or async)
 
+    bool isDataAvailable();
+    void clearData();
+    
     struct VeData {
       char veName[nameLen];
       char veValue[valueLen];
     };
     VeData veData[buffLen] = { };               // public buffer for received text frames
+    bool newDataAvailable = false;              // will be set to true after receiving a frame 
 
     // VE HEX Protocol
     char veHexBuffer[hexBuffLen] = { };         // public buffer for received hex frames

@@ -1,6 +1,6 @@
 /* framehandler.cpp
  *
- * Arduino library to read from Victron devices using VE.Direct protocol.
+ * Library to read from Victron devices using VE.Direct protocol.
  * Derived from Victron framehandler reference implementation.
  *
  * The MIT License
@@ -63,10 +63,26 @@ VeDirectFrameHandler::VeDirectFrameHandler() {}
 
 /**
  * @brief Destroy the Ve Direct Frame Handler:: Ve Direct Frame Handler object
- *
  */
 VeDirectFrameHandler::~VeDirectFrameHandler() {
       if (veHexCBList) delete veHexCBList;
+}
+
+/**
+ * @brief Return true if new data can be read
+ * 
+ * @return true on new data
+ * @return false when no data available
+ */
+bool VeDirectFrameHandler::isDataAvailable() {
+  return newDataAvailable;
+}
+
+/**
+ * @brief Clear state and wait for new data
+ */
+void VeDirectFrameHandler::clearData() {
+  newDataAvailable = false;
 }
 
 /**
@@ -193,6 +209,7 @@ void VeDirectFrameHandler::textRxEvent(char * mName, char * mValue) {
  */
 void VeDirectFrameHandler::frameEndEvent(bool valid) {
   if (valid) {
+    newDataAvailable = true;
     // check if there is an existing entry
     for (int i = 0; i < frameIndex; i++) {                  // read each name already in the temp buffer
       bool nameExists = false;
