@@ -28,51 +28,51 @@ struct VeHexCB {
 typedef void (*logFunction)(const char *, const char *);
 
 class VeDirectFrameHandler {
-    public:
-        VeDirectFrameHandler();
-        virtual ~VeDirectFrameHandler();
-        void rxData(uint8_t inbyte);                // byte of serial data to be passed by the application
-        void addHexCallback(hexCallback, void*);	// add function called back when hex frame is ready (sync or async)
+  public:
+    VeDirectFrameHandler();
+    virtual ~VeDirectFrameHandler();
+    void rxData(uint8_t inbyte);                // byte of serial data to be passed by the application
+    void addHexCallback(hexCallback, void*);	// add function called back when hex frame is ready (sync or async)
 
-        char veName[buffLen][nameLen] = { };        // public buffer for received names
-        char veValue[buffLen][valueLen] = { };      // public buffer for received values
-        char veHexBuffer[hexBuffLen] = { };		    // public buffer for received hex frames
+    char veName[buffLen][nameLen] = { };        // public buffer for received names
+    char veValue[buffLen][valueLen] = { };      // public buffer for received values
+    char veHexBuffer[hexBuffLen] = { };		    // public buffer for received hex frames
 
-        int frameIndex = 0;                         // which line of the frame are we on
-        int veEnd = 0;                              // current size (end) of the public buffer
-        int veHEnd;				                	// size of hex buffer
+    int frameIndex = 0;                         // which line of the frame are we on
+    int veEnd = 0;                              // current size (end) of the public buffer
+    int veHEnd;				                	// size of hex buffer
 
-    private:
-        enum States {                               // state machine
-            IDLE,
-            RECORD_BEGIN,
-            RECORD_NAME,
-            RECORD_VALUE,
-            CHECKSUM,
-            RECORD_HEX
-        };
+  private:
+    enum States {                               // state machine
+      IDLE,
+      RECORD_BEGIN,
+      RECORD_NAME,
+      RECORD_VALUE,
+      CHECKSUM,
+      RECORD_HEX
+    };
 
-        int mState = States::IDLE;                  // current state
+    int mState = States::IDLE;                  // current state
 
-        uint8_t mChecksum = 0;                      // checksum value
+    uint8_t mChecksum = 0;                      // checksum value
 
-        char * mTextPointer;                        // pointer to the private buffer we're writing to, name or value
+    char * mTextPointer;                        // pointer to the private buffer we're writing to, name or value
 
-        char tempName[frameLen][nameLen];           // private buffer for received names
-        char tempValue[frameLen][valueLen];         // private buffer for received values
+    char tempName[frameLen][nameLen];           // private buffer for received names
+    char tempValue[frameLen][valueLen];         // private buffer for received values
 
-        char mName[9];                              // buffer for the field name
-        char mValue[33];                            // buffer for the field value
+    char mName[9];                              // buffer for the field name
+    char mValue[33];                            // buffer for the field value
 
-        void textRxEvent(char *, char *);
-        void frameEndEvent(bool);
-        
-        int hexRxEvent(uint8_t);
+    void textRxEvent(char *, char *);
+    void frameEndEvent(bool);
+    
+    int hexRxEvent(uint8_t);
 
-        VeHexCB* veHexCBList;
-        int veCBEnd;
-        int maxCB;
-        int vePushedState;
+    VeHexCB* veHexCBList;
+    int veCBEnd;
+    int maxCB;
+    int vePushedState;
 };
 
 #endif // FRAMEHANDLER_H_
