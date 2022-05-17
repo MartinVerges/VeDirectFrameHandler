@@ -41,7 +41,9 @@
 
 #include "VeDirectFrameHandler.h"
 
+#ifndef DEBUG_MODE
 #define DEBUG_MODE false
+#endif
 
 // initial number - buffer is dynamically increased if necessary
 #define MAX_HEX_CALLBACK 10
@@ -75,13 +77,11 @@ VeDirectFrameHandler::~VeDirectFrameHandler() {
  */
 void VeDirectFrameHandler::rxData(uint8_t inbyte) {
   if ( inbyte == ':' && mState != CHECKSUM ) {
-    vePushedState = mState; //hex frame can interrupt TEXT
+    vePushedState = mState; // hex frame can interrupt TEXT
     mState = RECORD_HEX;
     veHEnd = 0;
   }
-  // For whatever reason, the reference implementation includes \t \n and space chars
-  // But my checksum is only valid if I leave them out!
-  if (mState != RECORD_HEX && inbyte != '\t' && inbyte != '\n' && inbyte != ' ') {
+  if (mState != RECORD_HEX) {
     if(DEBUG_MODE) printf("Checksum = %3d ", mChecksum);
     mChecksum += inbyte;
     //mChecksum = (mChecksum + inbyte) & 255;
@@ -118,7 +118,7 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
     case RECORD_NAME:
       // The record name is being received, terminated by a \t
       switch(inbyte) {
-        case '\t':	// End of field name (sperator)
+        case '\t': // End of field name (sperator)
           // the Checksum record indicates a EOR
           if (mTextPointer < (mName + sizeof(mName))) {
             *mTextPointer = 0; // Zero terminate
@@ -138,7 +138,7 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
       }
       break;
     case RECORD_VALUE:
-      // The record value is being received. The \r\n indicates a new record.
+      // The record value is being received. The \n indicates a new record.
       switch(inbyte) {
         case '\n':
           // forward record, only if it could be stored completely
@@ -160,8 +160,8 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
     case CHECKSUM:
       if (mChecksum != 0) printf("[CHECKSUM] Invalid frame - checksum is %d\n", mChecksum);
       mState = IDLE;
+      frameEndEvent(ignoreCheckSum || mChecksum == 0);
       mChecksum = 0;
-      frameEndEvent(mChecksum == 0);
       break;
     case RECORD_HEX:
       mState = hexRxEvent(inbyte);
@@ -172,13 +172,13 @@ void VeDirectFrameHandler::rxData(uint8_t inbyte) {
 /**
  * @brief This function is called every time a new name/value is successfully parsed.  It writes the values to the temporary buffer.
  *
- * @param mName 	Name of the element
- * @param mValue 	Value of the element
+ * @param mName     Name of the element
+ * @param mValue    Value of the element
  */
 void VeDirectFrameHandler::textRxEvent(char * mName, char * mValue) {
-  if (frameIndex < frameLen) {				// prevent overflow
-    strcpy(tempName[frameIndex], mName);		// copy name to temporary buffer
-    strcpy(tempValue[frameIndex], mValue);	// copy value to temporary buffer
+  if (frameIndex < frameLen) {                       // prevent overflow
+    strcpy(tempData[frameIndex].veName, mName);      // copy name to temporary buffer
+    strcpy(tempData[frameIndex].veValue, mValue);    // copy value to temporary buffer
     frameIndex++;
   }
 }
@@ -189,30 +189,29 @@ void VeDirectFrameHandler::textRxEvent(char * mName, char * mValue) {
  *          If the name exists in the public buffer, the new value is copied to the public buffer.
  *          If not, a new name/value entry is created in the public buffer.
  *
- * @param valid		Set to true if the checksum was correct
+ * @param valid Set to true if the checksum was correct
  */
 void VeDirectFrameHandler::frameEndEvent(bool valid) {
   if (valid) {
-    for (int i = 0; i < frameIndex; i++) {					// read each name already in the temp buffer
+    // check if there is an existing entry
+    for (int i = 0; i < frameIndex; i++) {                  // read each name already in the temp buffer
       bool nameExists = false;
-      for ( int j = 0; j <= veEnd; j++ ) {				// compare to existing names in the public buffer
-        if ( strcmp(tempName[i], veName[j]) == 0 ) {
-          strcpy(veValue[j], tempValue[i]);			// overwrite tempValue in the public buffer
+      for (int j = 0; j <= veEnd; j++) {                    // compare to existing names in the public buffer
+        if (strcmp(tempData[i].veName, veData[j].veName) == 0) {
+          strcpy(veData[j].veValue, tempData[i].veValue);   // overwrite tempValue in the public buffer
           nameExists = true;
           break;
         }
       }
       if (!nameExists) {
-        strcpy(veName[veEnd], tempName[i]);				// write new Name to public buffer
-        strcpy(veValue[veEnd], tempValue[i]);			// write new Value to public buffer
-        veEnd++;										// increment end of public buffer
-        if ( veEnd >= buffLen ) {						// stop any buffer overrun
-          veEnd = buffLen - 1;
-        }
+        strcpy(veData[veEnd].veName, tempData[i].veName);   // write new Name to public buffer
+        strcpy(veData[veEnd].veValue, tempData[i].veValue); // write new Value to public buffer
+        veEnd++;                                            // increment end of public buffer
+        if (veEnd >= buffLen) veEnd = buffLen - 1;          // stop any buffer overrun
       }
     }
   }
-  frameIndex = 0;	// reset frame
+  frameIndex = 0;    // reset frame
 }
 
 /**
@@ -236,17 +235,17 @@ static bool hexIsValid(const char* buffer, int size) {
  * @return mState
  */
 int VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
-  int ret=RECORD_HEX; // default - continue recording until end of frame
+  int ret = RECORD_HEX; // default - continue recording until end of frame
   switch (inbyte) {
     case '\n':
       // message ready - call all callbacks
-      if (hexIsValid(veHexBuffer,veHEnd)) {
+      if (hexIsValid(veHexBuffer, veHEnd)) {
         for(int i=0; i<veCBEnd; i++) {
           (*(veHexCBList[i].cb))(veHexBuffer, veHEnd, veHexCBList[i].data);
         }
       } else printf("[CHECKSUM] Invalid hex frame \n");
       // restore previous state
-      ret=vePushedState;
+      ret = vePushedState;
       break;
     default:
       veHexBuffer[veHEnd++] = inbyte;
@@ -266,7 +265,7 @@ int VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
  * @param data
  */
 void VeDirectFrameHandler::addHexCallback(hexCallback cb, void* data) {
-  if (veHexCBList == 0) { // first time, allocate callbacks buffer
+  if (veHexCBList == 0) {     // first time, allocate callbacks buffer
     veHexCBList = new VeHexCB[maxCB];
     veCBEnd=0;
   }

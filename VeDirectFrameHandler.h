@@ -1,6 +1,6 @@
 /* frameHandler.h
  *
- * Arduino library to read from Victron devices using VE.Direct protocol.
+ * Library to read from Victron devices using VE.Direct protocol.
  * Derived from Victron framehandler reference implementation.
  * 
  * 2020.05.05 - 0.2 - initial release
@@ -20,27 +20,30 @@ const uint8_t hexBuffLen = 100;	    // Maximum size of hex frame - max payload 3
 
 typedef void (*hexCallback)(const char*, int, void*);
 
-struct VeHexCB {
-  hexCallback cb;
-  void* data;
-};
-
-typedef void (*logFunction)(const char *, const char *);
-
 class VeDirectFrameHandler {
   public:
     VeDirectFrameHandler();
     virtual ~VeDirectFrameHandler();
     void rxData(uint8_t inbyte);                // byte of serial data to be passed by the application
-    void addHexCallback(hexCallback, void*);	// add function called back when hex frame is ready (sync or async)
+    void addHexCallback(hexCallback, void*);    // add function called back when hex frame is ready (sync or async)
 
-    char veName[buffLen][nameLen] = { };        // public buffer for received names
-    char veValue[buffLen][valueLen] = { };      // public buffer for received values
-    char veHexBuffer[hexBuffLen] = { };		    // public buffer for received hex frames
+    struct VeData {
+      char veName[nameLen];
+      char veValue[valueLen];
+    };
+    VeData veData[buffLen] = { };               // public buffer for received text frames
 
+    // VE HEX Protocol
+    char veHexBuffer[hexBuffLen] = { };         // public buffer for received hex frames
+    struct VeHexCB {
+      hexCallback cb;
+      void* data;
+    };
     int frameIndex = 0;                         // which line of the frame are we on
     int veEnd = 0;                              // current size (end) of the public buffer
-    int veHEnd;				                	// size of hex buffer
+    int veHEnd = 0;                             // size of hex buffer
+
+    bool ignoreCheckSum = false;                // Disable checksum verification
 
   private:
     enum States {                               // state machine
@@ -53,13 +56,10 @@ class VeDirectFrameHandler {
     };
 
     int mState = States::IDLE;                  // current state
-
     uint8_t mChecksum = 0;                      // checksum value
-
     char * mTextPointer;                        // pointer to the private buffer we're writing to, name or value
 
-    char tempName[frameLen][nameLen];           // private buffer for received names
-    char tempValue[frameLen][valueLen];         // private buffer for received values
+    VeData tempData[frameLen];                  // private buffer for received key+values
 
     char mName[9];                              // buffer for the field name
     char mValue[33];                            // buffer for the field value
