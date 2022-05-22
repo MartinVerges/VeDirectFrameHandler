@@ -10,7 +10,6 @@ project(VeDirectFrameHandler VERSION 1.0.1 DESCRIPTION "VE.Direct FrameHandler")
 
 SET(VEDIRECT_BUILD_STATIC FALSE CACHE BOOL "Build static library")
 
-
 IF (VEDIRECT_BUILD_STATIC)
     add_library(VeDirectFrameHandler STATIC VeDirectFrameHandler.cpp)
 ELSE()    
@@ -18,7 +17,3 @@ ELSE()
 ENDIF()
 
 set_target_properties(VeDirectFrameHandler PROPERTIES PUBLIC_HEADER VeDirectFrameHandler.h)
-
-
-# add the executable
-#add_executable(VeDirectFrameHandler VeDirectFrameHandler.cpp)

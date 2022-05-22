@@ -24,9 +24,9 @@ class VeDirectFrameHandler {
   public:
     VeDirectFrameHandler();
     virtual ~VeDirectFrameHandler();
-    void rxData(uint8_t inbyte);                // byte of serial data to be passed by the application
-    void addHexCallback(hexCallback, void*);    // add function called back when hex frame is ready (sync or async)
 
+    void rxData(uint8_t inbyte);
+    int addHexCallback(hexCallback cbFunction, void* cbAdditionalData);
     bool isDataAvailable();
     void clearData();
     
@@ -40,8 +40,8 @@ class VeDirectFrameHandler {
     // VE HEX Protocol
     char veHexBuffer[hexBuffLen] = { };         // public buffer for received hex frames
     struct VeHexCB {
-      hexCallback cb;
-      void* data;
+      hexCallback cbFunction;                   // function to call on each received hex frame
+      void* cbAdditionalData;                   // optional additional data send to CB function
     };
     int frameIndex = 0;                         // which line of the frame are we on
     int veEnd = 0;                              // current size (end) of the public buffer
@@ -73,10 +73,10 @@ class VeDirectFrameHandler {
     
     int hexRxEvent(uint8_t);
 
-    VeHexCB* veHexCBList;
-    int veCBEnd;
-    int maxCB;
-    int vePushedState;
+    VeHexCB* veHexCallBacks;                    // struct of registered callback functions
+    int numRegisteredCbFunctions;               // number of currently registered callback functions
+    int reservedSizeCB = 1;                     // reserved memory to store callbacks n*sizeof VeHexCB
+    int veLastTextState;                        // After HEX data, the TEXT message can continue (just wtf..)
 };
 
 #endif // FRAMEHANDLER_H_

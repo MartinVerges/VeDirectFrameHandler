@@ -65,7 +65,7 @@ VeDirectFrameHandler::VeDirectFrameHandler() {}
  * @brief Destroy the Ve Direct Frame Handler:: Ve Direct Frame Handler object
  */
 VeDirectFrameHandler::~VeDirectFrameHandler() {
-      if (veHexCBList) delete veHexCBList;
+      if (veHexCallBacks) delete veHexCallBacks;
 }
 
 /**
@@ -93,7 +93,7 @@ void VeDirectFrameHandler::clearData() {
  */
 void VeDirectFrameHandler::rxData(uint8_t inbyte) {
   if ( inbyte == ':' && mState != CHECKSUM ) {
-    vePushedState = mState; // hex frame can interrupt TEXT
+    veLastTextState = mState; // hex frame can interrupt TEXT
     mState = RECORD_HEX;
     veHEnd = 0;
   }
@@ -257,12 +257,12 @@ int VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
     case '\n':
       // message ready - call all callbacks
       if (hexIsValid(veHexBuffer, veHEnd)) {
-        for(int i=0; i<veCBEnd; i++) {
-          (*(veHexCBList[i].cb))(veHexBuffer, veHEnd, veHexCBList[i].data);
+        for(int i=0; i<numRegisteredCbFunctions; i++) {
+          (*(veHexCallBacks[i].cbFunction))(veHexBuffer, veHEnd, veHexCallBacks[i].cbAdditionalData);
         }
       } else printf("[CHECKSUM] Invalid hex frame \n");
       // restore previous state
-      ret = vePushedState;
+      ret = veLastTextState;
       break;
     default:
       veHexBuffer[veHEnd++] = inbyte;
@@ -276,25 +276,27 @@ int VeDirectFrameHandler::hexRxEvent(uint8_t inbyte) {
 }
 
 /**
- * @brief This function record a new callback for hex frames
+ * @brief This function allows you to call a function whenever a new full frame was received
  *
- * @param cb
- * @param data
+ * @param cbFunction
+ * @param cbAdditionalData
  */
-void VeDirectFrameHandler::addHexCallback(hexCallback cb, void* data) {
-  if (veHexCBList == 0) {     // first time, allocate callbacks buffer
-    veHexCBList = new VeHexCB[maxCB];
-    veCBEnd=0;
+int VeDirectFrameHandler::addHexCallback(hexCallback cbFunction, void* cbAdditionalData) {
+  if (veHexCallBacks == 0) {
+    // first time, allocate callbacks buffer
+    veHexCallBacks = new VeHexCB[reservedSizeCB];
+    numRegisteredCbFunctions = 0;
+  } else if (numRegisteredCbFunctions == reservedSizeCB) { 
+    // We reached the current reserved size, no space left to store this CB
+    // so we double the reserved size and copy old data to the new list
+    int newReservedSizeCB = reservedSizeCB * 2;
+    VeHexCB* tmpHexCallBacks = new VeHexCB[newReservedSizeCB];
+    memcpy(tmpHexCallBacks, veHexCallBacks, reservedSizeCB*sizeof(VeHexCB));
+    reservedSizeCB = newReservedSizeCB;
+    delete veHexCallBacks;
+    veHexCallBacks = tmpHexCallBacks;
   }
-  else if (veCBEnd == maxCB) { // we need to resize the callbacks buffer, we double the max size
-    int newMax = maxCB*2;
-    VeHexCB* tmpb = new VeHexCB[newMax];
-    memcpy(tmpb, veHexCBList, maxCB*sizeof(VeHexCB));
-    maxCB = newMax;
-    delete veHexCBList;
-    veHexCBList = tmpb;
-  }
-  veHexCBList[veCBEnd].cb = cb;
-  veHexCBList[veCBEnd].data = data;
-  veCBEnd++;
+  veHexCallBacks[numRegisteredCbFunctions].cbFunction = cbFunction;
+  veHexCallBacks[numRegisteredCbFunctions].cbAdditionalData = cbAdditionalData;
+  return ++numRegisteredCbFunctions;
 }
